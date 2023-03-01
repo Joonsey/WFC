@@ -1,10 +1,51 @@
+from __future__ import annotations
 import random
 import time
 
+ASSET_PATH = "tiles/"
+
+class Tile:
+    def __init__(self, name: str, sockets: list[str]) -> None:
+        self.name = name
+        self.sockets = sockets
+
+    def rotate(self) -> Tile:
+        new_sockets: list[str] = []
+        for i in range(len(self.sockets.copy())):
+            new_sockets.append(self.sockets[i-1])
+
+        return Tile(self.name, new_sockets)
+
+    def __str__(self) -> str:
+        return str(self.sockets)
+
+
+# A = LIGHT GREEN
+# B = DARK GRAY
+# C = DARK GREEN / LIGHT BLUE
+# D = DARK BLUE
+
+basic_tile = Tile("4", ['bbb', 'aaa', 'aaa', 'aaa'])
+TILE_TABLE = {
+    1 : basic_tile,
+    2 : basic_tile.rotate(),
+    3 : basic_tile.rotate().rotate(),
+    4 : basic_tile.rotate().rotate().rotate(),
+    5 : basic_tile.rotate().rotate().rotate(),
+    6 : Tile("1", ['ddd', 'ddd', 'ddd', 'ddd']),
+    7 : Tile("5", ['bbb', 'bbb', 'bbb', 'bbb']),
+    8 : Tile("2", ['ddd', 'ddd', 'ccc', 'ddd']),
+    9 : Tile("3", ['aaa', 'aaa', 'aaa', 'aaa']),
+}
+
+def inverse(socket: str):
+    return socket[2]+socket[1]+socket[0]
+
 class Cell:
     def __init__(self) -> None:
-        self.options: list[int] = [1,2,3,4,5,6,7,8,9]
+        self.options: list[int] = list(TILE_TABLE.keys())
         self.collapsed: bool = False
+        self.tile: None | Tile = None
 
     @property
     def entropy(self) -> int:
@@ -12,8 +53,20 @@ class Cell:
 
     def collapse(self) -> int:
         self.collapsed = True
-        self.options = [self.options[random.randrange(self.entropy)]]
+        self.options = [random.choice(self.options)]
+        self.tile = TILE_TABLE[self.options[0]]
         return self.options[0]
+
+
+    def validate(self, selected:Tile, direction : str):
+        if direction == "right":
+            self.options = (list(filter(lambda x : inverse(TILE_TABLE[x].sockets[3]) == selected.sockets[1], self.options)))
+        if direction == "left":
+            self.options = (list(filter(lambda x : inverse(TILE_TABLE[x].sockets[1]) == selected.sockets[3], self.options)))
+        if direction == "up":
+            self.options = (list(filter(lambda x : inverse(TILE_TABLE[x].sockets[2]) == selected.sockets[0], self.options)))
+        if direction == "down":
+            self.options = (list(filter(lambda x : inverse(TILE_TABLE[x].sockets[0]) == selected.sockets[2], self.options)))
 
 class WFC:
     def __init__(self, x, y) -> None:
@@ -41,16 +94,18 @@ class WFC:
         cell = self.cell_at(x,y)
         option = cell.collapse()
 
-        if x < self.x-1:
-            self.propogate(1+x, y, option)
-        if 0 < x:
-            self.propogate(x-1, y, option)
-        if y < self.y-1:
-            self.propogate(x, 1+y, option)
-        if 0 < y:
-            self.propogate(x, y-1, option)
+        self.propogate(x, y, option)
 
-    def propogate(self, x, y, option):
+    def propogate(self, x:int, y:int, option:int):
+        if x < self.x-1:
+            self.cell_at(x+1, y).validate(TILE_TABLE[option], "right")
+        if 0 < x:
+            self.cell_at(x-1, y).validate(TILE_TABLE[option], "left")
+        if y < self.y-1:
+            self.cell_at(x, y+1).validate(TILE_TABLE[option], "above")
+        if 0 < y:
+            self.cell_at(x, y-1).validate(TILE_TABLE[option], "below")
+
         cell = self.cell_at(x, y)
         if option in cell.options:
             cell.options.remove(option)
@@ -79,7 +134,8 @@ class WFC:
         all_lowest_entropies = list(filter(lambda x: x.entropy == lowest_entropy and not x.collapsed, only_non_collapsed))
         return all_lowest_entropies[random.randrange(len(all_lowest_entropies))]
 
-if __name__ == "__main__":
+
+def main():
     wfc = WFC(9,9)
     wfc.build_cells()
     wfc.collapse(2,2)
@@ -89,8 +145,15 @@ if __name__ == "__main__":
         cell_location = wfc.find_cell_location(cell_with_least_entropy)
         wfc.collapse(cell_location[0], cell_location[1])
 
-        for line in wfc.get_entropies():
-            print(line)
+        #for line in wfc.get_entropies():
+            #print(line)
+        for line in wfc.cells:
+            print([cell.tile for cell in line])
 
         print("\n")
         time.sleep(.1)
+    for line in wfc.cells:
+        print([cell.options for cell in line])
+
+if __name__ == "__main__":
+    main()
