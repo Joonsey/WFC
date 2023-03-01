@@ -34,21 +34,41 @@ class Tile:
 # C = DARK GREEN / LIGHT BLUE
 # D = DARK BLUE
 
+# 1 = DARK BLUE TILE
+# 2 = PARTIAL DARK / LIGHT BLUE TILE
+# 3 = LIGHT GREEN TILE
+# 4 = PARTIAL LIGHT GREEN DARK GRAY TILE
+# 5 = DARK GRAY TILE
+
 basic_tile = Tile("4", ['bbb', 'aaa', 'aaa', 'aaa'])
+dark_blue_tile = Tile("1", ['ddd', 'ddd', 'ddd', 'ddd'])
+
 TILE_TABLE = {
     1 : basic_tile,
     2 : basic_tile.rotate(),
     3 : basic_tile.rotate().rotate(),
     4 : basic_tile.rotate().rotate().rotate(),
     5 : basic_tile.rotate().rotate().rotate(),
-    6 : Tile("1", ['ddd', 'ddd', 'ddd', 'ddd']),
+    6 : Tile("1", ['ddd', 'aaa', 'ddd', 'aaa']),
     7 : Tile("5", ['bbb', 'bbb', 'bbb', 'bbb']),
     8 : Tile("2", ['ddd', 'ddd', 'ccc', 'ddd']),
-    9 : Tile("3", ['aaa', 'aaa', 'aaa', 'aaa']),
+    9 : Tile("2", ['ddd', 'aaa', 'ccc', 'aaa']),
+    10 : Tile("3", ['ccc', 'aaa', 'aaa', 'aaa']),
+    11 : Tile("3", ['aaa', 'aaa', 'aaa', 'aaa']),
+    12 : dark_blue_tile,
 }
 
 def inverse(socket: str):
     return socket[2]+socket[1]+socket[0]
+
+def foo(selected):
+    all_options = []
+    for option in TILE_TABLE.keys():
+        tile = TILE_TABLE[option]
+        if tile.sockets[3] == selected.sockets[1]:
+            all_options.append(option)
+    return all_options
+
 
 class Cell:
     def __init__(self) -> None:
@@ -60,22 +80,28 @@ class Cell:
     def entropy(self) -> int:
         return len(self.options)
 
-    def collapse(self) -> int:
+    def collapse(self, override: int= 0) -> int:
         self.collapsed = True
-        self.options = [random.choice(self.options)]
+        if override:
+            self.options = [override]
+        else:
+            print("options", self.options)
+            self.options = [random.choice(self.options)]
+            print("choice:", self.options)
         self.tile = TILE_TABLE[self.options[0]]
         return self.options[0]
 
-
     def validate(self, selected:Tile, direction : str):
+        options = self.options.copy()
+        #options = TILE_TABLE.keys()
         if direction == "right":
-            self.options = (list(filter(lambda x : inverse(TILE_TABLE[x].sockets[3]) == selected.sockets[1], self.options)))
+            self.options = (list(filter(lambda x : TILE_TABLE[x].sockets[1] in selected.sockets[3], options)))
         if direction == "left":
-            self.options = (list(filter(lambda x : inverse(TILE_TABLE[x].sockets[1]) == selected.sockets[3], self.options)))
-        if direction == "up":
-            self.options = (list(filter(lambda x : inverse(TILE_TABLE[x].sockets[2]) == selected.sockets[0], self.options)))
-        if direction == "down":
-            self.options = (list(filter(lambda x : inverse(TILE_TABLE[x].sockets[0]) == selected.sockets[2], self.options)))
+            self.options = (list(filter(lambda x : TILE_TABLE[x].sockets[3] in selected.sockets[1], options)))
+        if direction == "above":
+            self.options = (list(filter(lambda x : TILE_TABLE[x].sockets[0] in selected.sockets[2], options)))
+        if direction == "below":
+            self.options = (list(filter(lambda x : TILE_TABLE[x].sockets[2] in selected.sockets[0], options)))
 
 class WFC:
     def __init__(self, x, y) -> None:
@@ -102,12 +128,15 @@ class WFC:
     def build_cells(self) -> None:
         self.cells = [[Cell() for x in range(self.x)] for _ in range(self.y)]
 
-    def collapse(self, x, y):
+    def collapse(self, x, y, override:int = 0):
         assert x < self.x and y < self.y, \
             "x and y must be smaller than the dimensions of the list of cells"
 
         cell = self.cell_at(x,y)
-        option = cell.collapse()
+        if override:
+            option = cell.collapse(override)
+        else:
+            option = cell.collapse()
 
         self.propogate(x, y, option)
 
@@ -151,14 +180,15 @@ class WFC:
 
 
 def main():
-    wfc = WFC(9,9)
-    wfc.build_cells()
-    wfc.collapse(2,2)
-
-    display = pygame.display.set_mode((500,600))
+    wfc = WFC(28,20)
+    display = pygame.display.set_mode((1080,720))
     smol_surf = pygame.surface.Surface((8*wfc.x, 8*wfc.y))
+    wfc.build_cells()
+    wfc.collapse(0,0, 6)
+
 
     while not wfc.all_collapsed:
+        display.fill(0)
         cell_with_least_entropy = wfc.find_least_entropy()
         cell_location = wfc.find_cell_location(cell_with_least_entropy)
         wfc.collapse(cell_location[0],cell_location[1])
@@ -169,10 +199,19 @@ def main():
                 if cell.tile != None:
                     smol_surf.blit(cell.tile.surf, (x*8, y*8))
 
-        pygame.transform.scale(smol_surf, (500,600), display)
-        display.blit(smol_surf, (0,0))
+        pygame.transform.rotate(smol_surf, 180)
+        pygame.transform.scale(smol_surf, (1080,720), display)
         pygame.display.update()
-        time.sleep(.1)
+        time.sleep(.01)
+
+def run():
+    while True:
+        try:
+            main()
+        except IndexError:
+            continue
 
 if __name__ == "__main__":
-    main()
+    run()
+
+
