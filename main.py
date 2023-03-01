@@ -1,20 +1,29 @@
 from __future__ import annotations
 import random
 import time
+import pygame
+
+pygame.init()
 
 ASSET_PATH = "tiles/"
 
+
 class Tile:
-    def __init__(self, name: str, sockets: list[str]) -> None:
+    def __init__(self, name: str, sockets: list[str], surf:pygame.surface.Surface | None = None) -> None:
         self.name = name
         self.sockets = sockets
+        if surf == None:
+            self.surf = pygame.image.load(ASSET_PATH + name + ".png")
+        else:
+            self.surf = surf
 
     def rotate(self) -> Tile:
         new_sockets: list[str] = []
+        surf = pygame.transform.rotate(self.surf, 90)
         for i in range(len(self.sockets.copy())):
             new_sockets.append(self.sockets[i-1])
 
-        return Tile(self.name, new_sockets)
+        return Tile(self.name, new_sockets, surf)
 
     def __str__(self) -> str:
         return str(self.sockets)
@@ -72,6 +81,12 @@ class WFC:
     def __init__(self, x, y) -> None:
         self.x, self.y = x, y
         self.cells: list[list[Cell]] = [[]]
+
+    def get_collapsed(self) -> list[Cell]:
+        all_cells = []
+        [all_cells.extend(copy_list) for copy_list in self.cells.copy()]
+        return list(filter(lambda x: x.collapsed, all_cells))
+
 
     @property
     def all_collapsed(self) -> bool:
@@ -140,20 +155,24 @@ def main():
     wfc.build_cells()
     wfc.collapse(2,2)
 
+    display = pygame.display.set_mode((500,600))
+    smol_surf = pygame.surface.Surface((8*wfc.x, 8*wfc.y))
+
     while not wfc.all_collapsed:
         cell_with_least_entropy = wfc.find_least_entropy()
         cell_location = wfc.find_cell_location(cell_with_least_entropy)
-        wfc.collapse(cell_location[0], cell_location[1])
+        wfc.collapse(cell_location[0],cell_location[1])
 
-        #for line in wfc.get_entropies():
-            #print(line)
-        for line in wfc.cells:
-            print([cell.tile for cell in line])
+        for y in range(len(wfc.cells)):
+            for x in range(len(wfc.cells[y])):
+                cell = wfc.cell_at(x, y)
+                if cell.tile != None:
+                    smol_surf.blit(cell.tile.surf, (x*8, y*8))
 
-        print("\n")
+        pygame.transform.scale(smol_surf, (500,600), display)
+        display.blit(smol_surf, (0,0))
+        pygame.display.update()
         time.sleep(.1)
-    for line in wfc.cells:
-        print([cell.options for cell in line])
 
 if __name__ == "__main__":
     main()
